@@ -308,8 +308,32 @@ function App() {
     businessFunction: true,
     application: true,
   });
+  const [columnOrder, setColumnOrder] = useState(() => {
+    const savedColumnOrder = localStorage.getItem('columnOrder');
+    if (savedColumnOrder) {
+      try {
+        return JSON.parse(savedColumnOrder);
+      } catch (e) {
+        console.error('Error parsing saved column order:', e);
+      }
+    }
+    return [
+      'drag',
+      'stack_rank',
+      'title',
+      'description',
+      'status',
+      'priority',
+      'owner',
+      'eta',
+      'region',
+      'businessFunction',
+      'application',
+    ];
+  });
   const [globalFilter, setGlobalFilter] = useState('');
   const [draggedRowId, setDraggedRowId] = useState(null);
+  const [draggedColumnId, setDraggedColumnId] = useState(null);
 
   // Fetch ideas from the database
   useEffect(() => {
@@ -428,6 +452,41 @@ function App() {
     // Update the state with the new order
     setData(newData);
   }, [data, draggedRowId]);
+
+  // Column drag-and-drop handlers
+  const handleColumnDragStart = useCallback((columnId) => {
+    setDraggedColumnId(columnId);
+    console.log(`Started dragging column: ${columnId}`);
+  }, []);
+
+  const handleColumnDragOver = useCallback((e, targetColumnId) => {
+    e.preventDefault();
+    if (!draggedColumnId || draggedColumnId === targetColumnId) return;
+    
+    // Find the indices of the dragged and target columns
+    const currentColumnOrder = [...columnOrder];
+    const draggedIndex = currentColumnOrder.indexOf(draggedColumnId);
+    const targetIndex = currentColumnOrder.indexOf(targetColumnId);
+    
+    if (draggedIndex === -1 || targetIndex === -1) return;
+    
+    // Create a new array with the reordered columns
+    const newColumnOrder = [...currentColumnOrder];
+    const [draggedColumn] = newColumnOrder.splice(draggedIndex, 1);
+    newColumnOrder.splice(targetIndex, 0, draggedColumn);
+    
+    // Update the column order
+    setColumnOrder(newColumnOrder);
+    console.log('New column order:', newColumnOrder);
+  }, [columnOrder, draggedColumnId]);
+
+  const handleColumnDragEnd = useCallback(() => {
+    setDraggedColumnId(null);
+    console.log('Finished dragging column, new order:', columnOrder);
+    
+    // Save column order to localStorage for persistence
+    localStorage.setItem('columnOrder', JSON.stringify(columnOrder));
+  }, [columnOrder]);
 
   // Handle adding a new idea
   const handleAddIdea = async (newIdea) => {
@@ -800,10 +859,12 @@ function App() {
     state: {
       sorting,
       columnVisibility,
+      columnOrder,
       globalFilter,
     },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnOrderChange: setColumnOrder,
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -813,6 +874,7 @@ function App() {
     enableSorting: true,
     enableMultiSort: true,
     enableColumnVisibility: true,
+    enableColumnOrdering: true,
     enableGlobalFilter: true,
   });
 
@@ -923,6 +985,10 @@ function App() {
           onDragEnd={handleDragEnd}
           onDragOver={handleDragOver}
           draggedRowId={draggedRowId}
+          onColumnDragStart={handleColumnDragStart}
+          onColumnDragOver={handleColumnDragOver}
+          onColumnDragEnd={handleColumnDragEnd}
+          draggedColumnId={draggedColumnId}
         />
         
         {isAddIdeaOpen && (

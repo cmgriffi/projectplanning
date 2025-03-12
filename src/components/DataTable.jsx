@@ -35,6 +35,28 @@ const StyledTable = styled.table`
     &:hover {
       background: ${props => props.theme.buttonHover};
     }
+    
+    &.dragging {
+      opacity: 0.5;
+      background-color: #0d47a1;
+    }
+    
+    &[draggable="true"] {
+      cursor: grab;
+      
+      &:active {
+        cursor: grabbing;
+      }
+      
+      &::before {
+        content: "⋮⋮";
+        display: inline-block;
+        margin-right: 5px;
+        font-size: 14px;
+        opacity: 0.5;
+        transform: rotate(90deg);
+      }
+    }
   }
   
   td {
@@ -177,7 +199,11 @@ function DataTable({
   onDragStart,
   onDragEnd,
   onDragOver,
-  draggedRowId
+  draggedRowId,
+  onColumnDragStart,
+  onColumnDragEnd,
+  onColumnDragOver,
+  draggedColumnId
 }) {
   return (
     <TableContainer>
@@ -199,6 +225,18 @@ function DataTable({
                   style={{
                     width: header.getSize(),
                   }}
+                  draggable={header.column.id !== 'drag'}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'move';
+                    onColumnDragStart && onColumnDragStart(header.column.id);
+                  }}
+                  onDragEnd={() => onColumnDragEnd && onColumnDragEnd()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    onColumnDragOver && onColumnDragOver(e, header.column.id);
+                  }}
+                  onDragEnter={(e) => e.preventDefault()}
+                  className={draggedColumnId === header.column.id ? 'dragging' : ''}
                 >
                   <div style={{ display: 'flex', alignItems: 'center' }}>
                     {flexRender(
