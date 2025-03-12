@@ -295,7 +295,19 @@ function App() {
   });
 
   const [sorting, setSorting] = useState([]);
-  const [columnVisibility, setColumnVisibility] = useState({});
+  const [columnVisibility, setColumnVisibility] = useState({
+    drag: true,
+    stack_rank: true,
+    title: true,
+    description: true,
+    status: true,
+    priority: true,
+    owner: true,
+    eta: true,
+    region: true,
+    businessFunction: true,
+    application: true,
+  });
   const [globalFilter, setGlobalFilter] = useState('');
   const [draggedRowId, setDraggedRowId] = useState(null);
 
@@ -305,7 +317,7 @@ function App() {
       try {
         setIsLoading(true);
         console.log('Fetching ideas from server...');
-        const response = await fetch('http://localhost:3003/api/ideas');
+        const response = await fetch('http://localhost:3007/api/ideas');
         
         if (!response.ok) {
           throw new Error(`Failed to fetch ideas: ${response.status}`);
@@ -349,7 +361,7 @@ function App() {
       const orderedIds = data.map(item => item._id || item.id);
       console.log('Saving new order to database:', orderedIds);
       
-      const response = await fetch('http://localhost:3003/api/ideas/reorder', {
+      const response = await fetch('http://localhost:3007/api/ideas/reorder', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -362,7 +374,14 @@ function App() {
         throw new Error(`Failed to reorder ideas: ${errorData.error || response.status}`);
       }
       
-      console.log('Ideas reordered successfully in database');
+      // Get the updated ideas with new stack rankings from the server
+      const updatedIdeas = await response.json();
+      console.log('Ideas reordered successfully in database with updated stack rankings:', updatedIdeas);
+      
+      // Update the local state with the server response to ensure consistency
+      if (updatedIdeas && updatedIdeas.length > 0) {
+        setData(updatedIdeas);
+      }
     } catch (err) {
       console.error('Error saving idea order:', err);
       alert(`Failed to save idea order to database: ${err.message}`);
@@ -372,43 +391,60 @@ function App() {
   const handleDragOver = useCallback((e, targetRowId) => {
     e.preventDefault();
     if (!draggedRowId || draggedRowId === targetRowId) return;
-
-    setData(prevData => {
-      const newData = [...prevData];
-      const draggedIndex = newData.findIndex(item => item._id === draggedRowId || item.id === draggedRowId);
-      const targetIndex = newData.findIndex(item => item._id === targetRowId || item.id === targetRowId);
-      
-      if (draggedIndex === -1 || targetIndex === -1) return prevData;
-      
-      const [draggedItem] = newData.splice(draggedIndex, 1);
-      newData.splice(targetIndex, 0, draggedItem);
-      return newData;
+    
+    // Find the indices of the dragged and target rows
+    const draggedIndex = data.findIndex(item => (item._id || item.id) === draggedRowId);
+    const targetIndex = data.findIndex(item => (item._id || item.id) === targetRowId);
+    
+    if (draggedIndex === -1 || targetIndex === -1) return;
+    
+    // Create a new array with the reordered items
+    const newData = [...data];
+    const [draggedItem] = newData.splice(draggedIndex, 1);
+    newData.splice(targetIndex, 0, draggedItem);
+    
+    // Update the order property for each item based on its new position
+    newData.forEach((item, index) => {
+      item.order = index;
     });
-  }, [draggedRowId]);
+    
+    // Group items by business function
+    const businessFunctionGroups = {};
+    newData.forEach(item => {
+      const businessFunction = item.businessFunction || 'Unassigned';
+      if (!businessFunctionGroups[businessFunction]) {
+        businessFunctionGroups[businessFunction] = [];
+      }
+      businessFunctionGroups[businessFunction].push(item);
+    });
+    
+    // Update stack_rank within each business function group
+    Object.values(businessFunctionGroups).forEach(group => {
+      group.forEach((item, index) => {
+        item.stack_rank = index + 1;
+      });
+    });
+    
+    // Update the state with the new order
+    setData(newData);
+  }, [data, draggedRowId]);
 
   // Handle adding a new idea
   const handleAddIdea = async (newIdea) => {
     try {
       console.log('Adding new idea:', newIdea);
-      console.log('Sending request to http://localhost:3003/api/ideas');
+      console.log('Sending request to http://localhost:3007/api/ideas');
       
       // Add a timestamp to help with debugging
       const requestStartTime = new Date().toISOString();
       console.log(`Request started at: ${requestStartTime}`);
       
-      const response = await fetch('http://localhost:3003/api/ideas', {
+      const response = await fetch('http://localhost:3007/api/ideas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
         },
         body: JSON.stringify(newIdea),
-        // Disable credentials to avoid CORS preflight issues
-        credentials: 'omit',
-        // Ensure CORS is properly handled
-        mode: 'cors',
-        // Add timeout to prevent hanging requests
-        signal: AbortSignal.timeout(10000) // 10 second timeout
       });
       
       console.log(`Response status: ${response.status}`);
@@ -453,7 +489,7 @@ function App() {
       const ideaId = updatedIdea._id || updatedIdea.id;
       console.log(`Updating idea with ID: ${ideaId}`, updatedIdea);
       
-      const response = await fetch(`http://localhost:3003/api/ideas/${ideaId}`, {
+      const response = await fetch(`http://localhost:3007/api/ideas/${ideaId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -489,7 +525,7 @@ function App() {
   const handleDeleteIdea = async (ideaId) => {
     try {
       console.log(`Deleting idea with ID: ${ideaId}`);
-      const response = await fetch(`http://localhost:3003/api/ideas/${ideaId}`, {
+      const response = await fetch(`http://localhost:3007/api/ideas/${ideaId}`, {
         method: 'DELETE',
       });
       
@@ -524,6 +560,39 @@ function App() {
         ),
         size: 48,
         enableHiding: false,
+      }),
+      columnHelper.accessor('stack_rank', {
+        header: 'Stack Ranking',
+        cell: info => {
+          const value = info.getValue() || info.row.index + 1;
+          const businessFunction = info.row.original.businessFunction || 'Unassigned';
+          
+          return (
+            <div 
+              style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: currentTheme.isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+                fontWeight: '600',
+                fontSize: '0.875rem',
+                margin: '0 auto',
+                position: 'relative',
+                cursor: 'help',
+              }}
+              title={`Rank #${value} in ${businessFunction}`}
+            >
+              {value}
+            </div>
+          );
+        },
+        size: 120,
+        minSize: 100,
+        enableHiding: false,
+        enableSorting: true,
       }),
       columnHelper.accessor('title', {
         header: 'Title',
@@ -850,6 +919,10 @@ function App() {
           table={table}
           onRowClick={setSelectedIdea}
           showPagination={true}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOver={handleDragOver}
+          draggedRowId={draggedRowId}
         />
         
         {isAddIdeaOpen && (

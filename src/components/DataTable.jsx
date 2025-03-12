@@ -22,7 +22,7 @@ const StyledTable = styled.table`
     position: relative;
     padding: 0.75rem 1rem;
     background: ${props => props.theme.headerBackground};
-    color: ${props => props.theme.isDark ? '#f7fafc' : '#f7fafc'};
+    color: #f7fafc;
     font-weight: 600;
     text-align: left;
     user-select: none;
@@ -55,6 +55,11 @@ const StyledTable = styled.table`
     
     &:nth-child(even) {
       background: ${props => props.theme.isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)'};
+    }
+    
+    &.dragging td {
+      background: ${props => props.theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'};
+      opacity: 0.8;
     }
   }
   
@@ -154,12 +159,25 @@ const SortIndicator = styled.span`
   margin-left: 0.25rem;
 `;
 
+const DragHandle = styled.div`
+  cursor: grab;
+  padding: 0.5rem;
+  
+  &:active {
+    cursor: grabbing;
+  }
+`;
+
 function DataTable({ 
   table, 
   title, 
   onRowClick, 
   actions,
-  showPagination = false
+  showPagination = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  draggedRowId
 }) {
   return (
     <TableContainer>
@@ -205,23 +223,64 @@ function DataTable({
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows.map(row => (
-            <tr 
-              key={row.id}
-              onClick={() => onRowClick && onRowClick(row.original)}
-            >
-              {row.getVisibleCells().map(cell => (
-                <td 
-                  key={cell.id}
-                  style={{
-                    width: cell.column.getSize(),
-                  }}
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map(row => {
+            const rowId = row.original._id || row.original.id;
+            const isDragging = draggedRowId === rowId;
+            
+            return (
+              <tr 
+                key={row.id}
+                className={isDragging ? 'dragging' : ''}
+                draggable={true}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  // Add a delay to improve the drag visual
+                  setTimeout(() => {
+                    onDragStart && onDragStart(rowId);
+                  }, 0);
+                }}
+                onDragEnd={() => onDragEnd && onDragEnd()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  onDragOver && onDragOver(e, rowId);
+                }}
+                onDragEnter={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  // Don't trigger row click when clicking on the drag handle
+                  if (e.target.closest('.drag-handle')) return;
+                  onRowClick && onRowClick(row.original);
+                }}
+              >
+                {row.getVisibleCells().map(cell => {
+                  // Special handling for the drag column
+                  if (cell.column.id === 'drag') {
+                    return (
+                      <td 
+                        key={cell.id}
+                        style={{
+                          width: cell.column.getSize(),
+                        }}
+                        className="drag-handle"
+                      >
+                        <DragHandle>⋮⋮</DragHandle>
+                      </td>
+                    );
+                  }
+                  
+                  return (
+                    <td 
+                      key={cell.id}
+                      style={{
+                        width: cell.column.getSize(),
+                      }}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
         </tbody>
       </StyledTable>
       
