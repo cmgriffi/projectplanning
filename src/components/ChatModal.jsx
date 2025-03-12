@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
-import { FiMessageSquare, FiX, FiSend, FiLoader } from 'react-icons/fi';
+import { FiMessageSquare, FiX, FiSend, FiLoader, FiUser, FiCpu } from 'react-icons/fi';
+import ReactMarkdown from 'react-markdown';
 
 const ChatContainer = styled.div`
   position: fixed;
@@ -74,32 +75,129 @@ const ChatMessages = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  scroll-behavior: smooth;
 `;
 
 const Message = styled.div`
   display: flex;
   flex-direction: column;
-  max-width: 80%;
+  max-width: 85%;
   ${props => props.isUser ? 'align-self: flex-end;' : 'align-self: flex-start;'}
+  animation: ${props => props.isUser ? 'slideInRight' : 'slideInLeft'} 0.3s ease;
   
-  .message-content {
-    padding: 0.75rem 1rem;
-    border-radius: 1rem;
+  @keyframes slideInRight {
+    from { transform: translateX(20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
+  @keyframes slideInLeft {
+    from { transform: translateX(-20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+`;
+
+const MessageHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  padding: 0 0.5rem;
+  
+  .avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: ${props => props.isUser 
       ? props.theme.buttonBackground 
-      : (props.theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)')};
-    color: ${props => props.isUser ? 'white' : props.theme.text};
-    font-size: 0.875rem;
-    line-height: 1.5;
+      : (props.theme.isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)')};
+    color: white;
+    
+    svg {
+      width: 14px;
+      height: 14px;
+    }
   }
   
-  .message-meta {
+  .name {
     font-size: 0.75rem;
-    margin-top: 0.25rem;
-    opacity: 0.7;
-    padding: 0 0.5rem;
+    font-weight: 500;
     color: ${props => props.theme.text};
+    opacity: 0.7;
   }
+`;
+
+const MessageContent = styled.div`
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: ${props => props.isUser 
+    ? props.theme.buttonBackground 
+    : (props.theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)')};
+  color: ${props => props.isUser ? 'white' : props.theme.text};
+  font-size: 0.875rem;
+  line-height: 1.5;
+  
+  /* Markdown styling */
+  p {
+    margin: 0.5rem 0;
+    &:first-child { margin-top: 0; }
+    &:last-child { margin-bottom: 0; }
+  }
+  
+  ul, ol {
+    margin: 0.5rem 0;
+    padding-left: 1.5rem;
+  }
+  
+  code {
+    font-family: monospace;
+    background: ${props => props.isUser 
+      ? 'rgba(255, 255, 255, 0.2)' 
+      : (props.theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)')};
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+  
+  pre {
+    background: ${props => props.isUser 
+      ? 'rgba(255, 255, 255, 0.2)' 
+      : (props.theme.isDark ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.1)')};
+    padding: 0.5rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0.5rem 0;
+    
+    code {
+      background: none;
+      padding: 0;
+    }
+  }
+  
+  a {
+    color: ${props => props.isUser ? 'white' : props.theme.buttonBackground};
+    text-decoration: underline;
+  }
+  
+  blockquote {
+    border-left: 3px solid ${props => props.isUser 
+      ? 'rgba(255, 255, 255, 0.3)' 
+      : props.theme.buttonBackground};
+    margin: 0.5rem 0;
+    padding-left: 0.75rem;
+    font-style: italic;
+  }
+`;
+
+const MessageMeta = styled.div`
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  opacity: 0.7;
+  padding: 0 0.5rem;
+  color: ${props => props.theme.text};
+  text-align: ${props => props.isUser ? 'right' : 'left'};
 `;
 
 const ChatInputContainer = styled.div`
@@ -109,7 +207,7 @@ const ChatInputContainer = styled.div`
   gap: 0.5rem;
 `;
 
-const ChatInput = styled.input`
+const ChatInput = styled.textarea`
   flex: 1;
   padding: 0.75rem 1rem;
   border-radius: 1.5rem;
@@ -117,6 +215,10 @@ const ChatInput = styled.input`
   background: ${props => props.theme.isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)'};
   color: ${props => props.theme.text};
   font-size: 0.875rem;
+  resize: none;
+  min-height: 2.5rem;
+  max-height: 120px;
+  font-family: inherit;
   
   &:focus {
     outline: none;
@@ -141,6 +243,7 @@ const SendButton = styled.button`
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s;
+  align-self: flex-end;
   
   &:hover {
     background: ${props => props.theme.buttonHover};
@@ -191,8 +294,11 @@ const LoadingIndicator = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 0.75rem;
   color: ${props => props.theme.text};
+  font-size: 0.875rem;
+  max-width: 85%;
+  align-self: flex-start;
   
   svg {
     animation: spin 1s linear infinite;
@@ -202,6 +308,33 @@ const LoadingIndicator = styled.div`
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+`;
+
+const ThinkingBubbles = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: ${props => props.theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'};
+  
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: ${props => props.theme.text};
+    opacity: 0.7;
+    animation: bounce 1.4s infinite ease-in-out;
+    
+    &:nth-child(1) { animation-delay: 0s; }
+    &:nth-child(2) { animation-delay: 0.2s; }
+    &:nth-child(3) { animation-delay: 0.4s; }
+  }
+  
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-5px); }
   }
 `;
 
@@ -219,12 +352,30 @@ function ChatModal({ isOpen, onClose, idea, allIdeas }) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages]);
+  }, [messages, isLoading]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+    }
+  }, [input]);
+
+  // Focus input when chat opens
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      setTimeout(() => {
+        inputRef.current.focus();
+      }, 300);
+    }
+  }, [isOpen]);
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
@@ -307,7 +458,8 @@ function ChatModal({ isOpen, onClose, idea, allIdeas }) {
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
       handleSendMessage();
     }
   };
@@ -336,15 +488,38 @@ function ChatModal({ isOpen, onClose, idea, allIdeas }) {
         <ChatMessages>
           {messages.map(message => (
             <Message key={message.id} isUser={message.sender === 'user'}>
-              <div className="message-content">{message.content}</div>
-              <div className="message-meta">{formatTime(message.timestamp)}</div>
+              <MessageHeader isUser={message.sender === 'user'}>
+                <div className="avatar">
+                  {message.sender === 'user' ? <FiUser /> : <FiCpu />}
+                </div>
+                <div className="name">
+                  {message.sender === 'user' ? 'You' : 'AI Assistant'}
+                </div>
+              </MessageHeader>
+              
+              <MessageContent isUser={message.sender === 'user'}>
+                {message.sender === 'ai' ? (
+                  <ReactMarkdown>
+                    {message.content}
+                  </ReactMarkdown>
+                ) : (
+                  message.content
+                )}
+              </MessageContent>
+              
+              <MessageMeta isUser={message.sender === 'user'}>
+                {formatTime(message.timestamp)}
+              </MessageMeta>
             </Message>
           ))}
           
           {isLoading && (
             <LoadingIndicator>
-              <FiLoader />
-              Thinking...
+              <ThinkingBubbles>
+                <div className="dot"></div>
+                <div className="dot"></div>
+                <div className="dot"></div>
+              </ThinkingBubbles>
             </LoadingIndicator>
           )}
           
@@ -353,12 +528,13 @@ function ChatModal({ isOpen, onClose, idea, allIdeas }) {
         
         <ChatInputContainer>
           <ChatInput
-            type="text"
-            placeholder="Type your message..."
+            ref={inputRef}
+            placeholder="Type your message... (Shift+Enter for new line)"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             disabled={isLoading}
+            rows={1}
           />
           <SendButton onClick={handleSendMessage} disabled={!input.trim() || isLoading}>
             <FiSend />
