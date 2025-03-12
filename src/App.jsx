@@ -797,7 +797,14 @@ function App() {
         size: 180,
         minSize: 150,
         enableColumnFilter: true,
-        filterFn: 'equals',
+        filterFn: (row, columnId, filterValue) => {
+          // Handle multi-value filtering for business function
+          if (Array.isArray(filterValue)) {
+            return filterValue.includes(row.getValue(columnId));
+          }
+          // Handle single value filtering
+          return row.getValue(columnId) === filterValue;
+        },
       }),
       columnHelper.accessor('application', {
         header: 'Application',

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { FiFilter, FiX, FiCheck, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import MultiSelectDropdown from './MultiSelectDropdown';
 
 const FiltersContainer = styled.div`
   background: ${props => props.theme.tableBackground};
@@ -292,12 +293,27 @@ const TableFilters = ({ table }) => {
               const filterFn = column.columnDef.filterFn;
               const uniqueValues = getUniqueValuesForColumn(columnId);
               
+              // Special handling for business function - use MultiSelectDropdown
+              if (columnId === 'businessFunction') {
+                return (
+                  <FilterGroup key={columnId}>
+                    <FilterLabel>{columnHeader}</FilterLabel>
+                    <MultiSelectDropdown
+                      options={uniqueValues}
+                      value={Array.isArray(localFilters[columnId]) ? localFilters[columnId] : 
+                             localFilters[columnId] ? [localFilters[columnId]] : []}
+                      onChange={(selected) => handleFilterChange(columnId, selected.length > 0 ? selected : undefined)}
+                      placeholder="Select business functions"
+                    />
+                  </FilterGroup>
+                );
+              }
+              
               // Determine if we should use a select dropdown or text input
               const useSelectInput = 
                 (filterFn === 'equals' || 
                  columnId === 'status' || 
-                 columnId === 'priority' || 
-                 columnId === 'businessFunction') && 
+                 columnId === 'priority') && 
                 uniqueValues.length > 0 && 
                 uniqueValues.length <= 15;
               
