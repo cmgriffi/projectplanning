@@ -161,7 +161,8 @@ export function AddIdeaModal({ onClose, onSubmit }) {
     status: 'New',
     owner: '',
     eta: '',
-    region: ''
+    region: '',
+    businessFunction: 'Unassigned'
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -275,6 +276,27 @@ export function AddIdeaModal({ onClose, onSubmit }) {
               onChange={handleChange}
               placeholder="e.g., North America"
             />
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="businessFunction">Business Function</Label>
+            <Select
+              id="businessFunction"
+              name="businessFunction"
+              value={formData.businessFunction}
+              onChange={handleChange}
+            >
+              <option value="Unassigned">Unassigned</option>
+              <option value="HR">HR</option>
+              <option value="Finance">Finance</option>
+              <option value="Operations">Operations</option>
+              <option value="IT">IT</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Sales">Sales</option>
+              <option value="Legal">Legal</option>
+              <option value="R&D">R&D</option>
+              <option value="Customer Support">Customer Support</option>
+              <option value="Environmental">Environmental</option>
+            </Select>
           </FormGroup>
           <ButtonGroup>
             <Button type="button" onClick={onClose} $secondary>
