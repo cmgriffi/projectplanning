@@ -134,6 +134,14 @@ const Button = styled.button`
   }
 `;
 
+const DeleteButton = styled(Button)`
+  background: #e53e3e;
+  
+  &:hover {
+    background: #c53030;
+  }
+`;
+
 const ButtonGroup = styled.div`
   display: flex;
   gap: 1rem;
@@ -141,9 +149,18 @@ const ButtonGroup = styled.div`
   margin-top: 2rem;
 `;
 
-export function IdeaDetail({ idea, onClose, onSave }) {
+const Metadata = styled.div`
+  font-size: 0.8rem;
+  color: ${props => props.theme.isDark ? '#a0aec0' : '#718096'};
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid ${props => props.theme.borderColor};
+`;
+
+export function IdeaDetail({ idea, onClose, onSave, onDelete }) {
   const [editedIdea, setEditedIdea] = useState(idea);
   const [isEdited, setIsEdited] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleChange = (field, value) => {
     setEditedIdea(prev => ({ ...prev, [field]: value }));
@@ -152,7 +169,20 @@ export function IdeaDetail({ idea, onClose, onSave }) {
 
   const handleSave = () => {
     onSave(editedIdea);
-    onClose();
+  };
+
+  const handleDelete = () => {
+    if (confirmDelete) {
+      onDelete(idea._id || idea.id);
+    } else {
+      setConfirmDelete(true);
+    }
+  };
+
+  // Format dates for display
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleString();
   };
 
   return (
@@ -164,7 +194,7 @@ export function IdeaDetail({ idea, onClose, onSave }) {
         <Field>
           <Label>Title</Label>
           <Input
-            value={editedIdea.title}
+            value={editedIdea.title || ''}
             onChange={e => handleChange('title', e.target.value)}
             placeholder="Enter idea title"
           />
@@ -173,7 +203,7 @@ export function IdeaDetail({ idea, onClose, onSave }) {
         <Field>
           <Label>Description</Label>
           <TextArea
-            value={editedIdea.description}
+            value={editedIdea.description || ''}
             onChange={e => handleChange('description', e.target.value)}
             placeholder="Enter detailed description"
           />
@@ -182,36 +212,76 @@ export function IdeaDetail({ idea, onClose, onSave }) {
         <Field>
           <Label>Status</Label>
           <Select
-            value={editedIdea.status}
+            value={editedIdea.status || 'New'}
             onChange={e => handleChange('status', e.target.value)}
           >
             <option value="New">New</option>
             <option value="In Progress">In Progress</option>
-            <option value="Under Review">Under Review</option>
+            <option value="Completed">Completed</option>
+            <option value="On Hold">On Hold</option>
+            <option value="Cancelled">Cancelled</option>
           </Select>
         </Field>
 
         <Field>
           <Label>Priority</Label>
           <Select
-            value={editedIdea.priority}
+            value={editedIdea.priority || 'Medium'}
             onChange={e => handleChange('priority', e.target.value)}
           >
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
             <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
           </Select>
         </Field>
 
+        <Field>
+          <Label>Owner</Label>
+          <Input
+            value={editedIdea.owner || ''}
+            onChange={e => handleChange('owner', e.target.value)}
+            placeholder="Assign an owner"
+          />
+        </Field>
+
+        <Field>
+          <Label>ETA</Label>
+          <Input
+            value={editedIdea.eta || ''}
+            onChange={e => handleChange('eta', e.target.value)}
+            placeholder="e.g., Q2 2025"
+          />
+        </Field>
+
+        <Field>
+          <Label>Region</Label>
+          <Input
+            value={editedIdea.region || ''}
+            onChange={e => handleChange('region', e.target.value)}
+            placeholder="e.g., North America"
+          />
+        </Field>
+
+        {(editedIdea.createdAt || editedIdea.updatedAt) && (
+          <Metadata>
+            {editedIdea.createdAt && <div>Created: {formatDate(editedIdea.createdAt)}</div>}
+            {editedIdea.updatedAt && <div>Last Updated: {formatDate(editedIdea.updatedAt)}</div>}
+          </Metadata>
+        )}
+
         <ButtonGroup>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button 
-            onClick={handleSave}
-            disabled={!isEdited}
-            style={{ background: !isEdited ? undefined : '#48bb78' }}
-          >
-            Save Changes
-          </Button>
+          {confirmDelete ? (
+            <>
+              <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+              <DeleteButton onClick={handleDelete}>Confirm Delete</DeleteButton>
+            </>
+          ) : (
+            <>
+              <DeleteButton onClick={handleDelete}>Delete</DeleteButton>
+              <Button onClick={handleSave} disabled={!isEdited}>Save Changes</Button>
+            </>
+          )}
         </ButtonGroup>
 
         <IdeaChat idea={editedIdea} />

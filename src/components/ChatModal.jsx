@@ -406,7 +406,7 @@ function ChatModal({ isOpen, onClose, idea, allIdeas }) {
       }
       
       console.log("Sending request to chat API...");
-      const response = await fetch('/api/chat', {
+      const response = await fetch('http://localhost:3003/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

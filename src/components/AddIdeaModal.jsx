@@ -23,6 +23,8 @@ const ModalContent = styled.div`
   max-width: 600px;
   position: relative;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  max-height: 90vh;
+  overflow-y: auto;
 `;
 
 const CloseButton = styled.button`
@@ -156,8 +158,13 @@ export function AddIdeaModal({ onClose, onSubmit }) {
     title: '',
     description: '',
     priority: 'Medium',
-    status: 'New'
+    status: 'New',
+    owner: '',
+    eta: '',
+    region: ''
   });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -167,9 +174,18 @@ export function AddIdeaModal({ onClose, onSubmit }) {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    setIsSubmitting(true);
+    
+    try {
+      await onSubmit(formData);
+      onClose();
+    } catch (error) {
+      console.error('Error submitting idea:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -178,7 +194,7 @@ export function AddIdeaModal({ onClose, onSubmit }) {
         <CloseButton onClick={onClose} type="button">
           <FiX />
         </CloseButton>
-        <Title>Add New Project Idea</Title>
+        <Title>Add New Product Idea</Title>
         <Form onSubmit={handleSubmit}>
           <FormGroup>
             <Label htmlFor="title">Title</Label>
@@ -199,21 +215,7 @@ export function AddIdeaModal({ onClose, onSubmit }) {
               value={formData.description}
               onChange={handleChange}
               placeholder="Describe your idea..."
-              required
             />
-          </FormGroup>
-          <FormGroup>
-            <Label htmlFor="priority">Priority</Label>
-            <Select
-              id="priority"
-              name="priority"
-              value={formData.priority}
-              onChange={handleChange}
-            >
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </Select>
           </FormGroup>
           <FormGroup>
             <Label htmlFor="status">Status</Label>
@@ -227,14 +229,59 @@ export function AddIdeaModal({ onClose, onSubmit }) {
               <option value="In Progress">In Progress</option>
               <option value="Completed">Completed</option>
               <option value="On Hold">On Hold</option>
+              <option value="Cancelled">Cancelled</option>
             </Select>
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="priority">Priority</Label>
+            <Select
+              id="priority"
+              name="priority"
+              value={formData.priority}
+              onChange={handleChange}
+            >
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
+            </Select>
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="owner">Owner</Label>
+            <Input
+              id="owner"
+              name="owner"
+              value={formData.owner}
+              onChange={handleChange}
+              placeholder="Assign an owner"
+            />
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="eta">ETA</Label>
+            <Input
+              id="eta"
+              name="eta"
+              value={formData.eta}
+              onChange={handleChange}
+              placeholder="e.g., Q2 2025"
+            />
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="region">Region</Label>
+            <Input
+              id="region"
+              name="region"
+              value={formData.region}
+              onChange={handleChange}
+              placeholder="e.g., North America"
+            />
           </FormGroup>
           <ButtonGroup>
             <Button type="button" onClick={onClose} $secondary>
               Cancel
             </Button>
-            <Button type="submit" disabled={!formData.title.trim() || !formData.description.trim()}>
-              Add Idea
+            <Button type="submit" disabled={isSubmitting || !formData.title}>
+              {isSubmitting ? 'Adding...' : 'Add Idea'}
             </Button>
           </ButtonGroup>
         </Form>

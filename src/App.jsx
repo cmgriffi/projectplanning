@@ -274,7 +274,9 @@ const initialItems = [
 ];
 
 function App() {
-  const [data, setData] = useState(initialItems);
+  const [data, setData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [isAddIdeaOpen, setIsAddIdeaOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectedIdea, setSelectedIdea] = useState(null);
@@ -297,16 +299,75 @@ function App() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [draggedRowId, setDraggedRowId] = useState(null);
 
+  // Fetch ideas from the database
+  useEffect(() => {
+    const fetchIdeas = async () => {
+      try {
+        setIsLoading(true);
+        console.log('Fetching ideas from server...');
+        const response = await fetch('http://localhost:3003/api/ideas');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ideas: ${response.status}`);
+        }
+        
+        const ideas = await response.json();
+        console.log('Ideas fetched from server:', ideas);
+        
+        // Ensure we use the MongoDB data if available
+        if (ideas && ideas.length > 0) {
+          setData(ideas);
+        } else {
+          console.log('No ideas found in database, using initial data');
+          setData(initialItems);
+        }
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching ideas:', err);
+        setError('Failed to load ideas. Using sample data instead.');
+        setData(initialItems);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchIdeas();
+  }, []);
+
   const handleDragStart = useCallback((rowId) => {
     setDraggedRowId(rowId);
   }, []);
 
-  const handleDragEnd = useCallback(() => {
+  const handleDragEnd = useCallback(async () => {
     if (!draggedRowId) return;
     setDraggedRowId(null);
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 3000);
-  }, [draggedRowId]);
+    
+    // Save the new order to the database
+    try {
+      const orderedIds = data.map(item => item._id || item.id);
+      console.log('Saving new order to database:', orderedIds);
+      
+      const response = await fetch('http://localhost:3003/api/ideas/reorder', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ orderedIds }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to reorder ideas: ${errorData.error || response.status}`);
+      }
+      
+      console.log('Ideas reordered successfully in database');
+    } catch (err) {
+      console.error('Error saving idea order:', err);
+      alert(`Failed to save idea order to database: ${err.message}`);
+    }
+  }, [draggedRowId, data]);
 
   const handleDragOver = useCallback((e, targetRowId) => {
     e.preventDefault();
@@ -314,8 +375,8 @@ function App() {
 
     setData(prevData => {
       const newData = [...prevData];
-      const draggedIndex = newData.findIndex(item => item.id === draggedRowId);
-      const targetIndex = newData.findIndex(item => item.id === targetRowId);
+      const draggedIndex = newData.findIndex(item => item._id === draggedRowId || item.id === draggedRowId);
+      const targetIndex = newData.findIndex(item => item._id === targetRowId || item.id === targetRowId);
       
       if (draggedIndex === -1 || targetIndex === -1) return prevData;
       
@@ -324,6 +385,130 @@ function App() {
       return newData;
     });
   }, [draggedRowId]);
+
+  // Handle adding a new idea
+  const handleAddIdea = async (newIdea) => {
+    try {
+      console.log('Adding new idea:', newIdea);
+      console.log('Sending request to http://localhost:3003/api/ideas');
+      
+      // Add a timestamp to help with debugging
+      const requestStartTime = new Date().toISOString();
+      console.log(`Request started at: ${requestStartTime}`);
+      
+      const response = await fetch('http://localhost:3003/api/ideas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(newIdea),
+        // Disable credentials to avoid CORS preflight issues
+        credentials: 'omit',
+        // Ensure CORS is properly handled
+        mode: 'cors',
+        // Add timeout to prevent hanging requests
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      });
+      
+      console.log(`Response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response from server:', errorText);
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
+      }
+      
+      const savedIdea = await response.json();
+      console.log('Idea saved to database:', savedIdea);
+      
+      // Update state with the saved idea from MongoDB (with _id)
+      setData(prevData => [...prevData, savedIdea]);
+      setIsAddIdeaOpen(false);
+    } catch (err) {
+      console.error('Error adding idea:', err);
+      
+      // Check if it's a network error
+      if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+        console.error('Network error - Unable to connect to the server');
+        alert('Network error: Unable to connect to the server. Please check if the server is running.');
+      } else if (err.name === 'AbortError') {
+        console.error('Request timed out');
+        alert('Request timed out. The server took too long to respond.');
+      } else {
+        // Generic error handling
+        alert(`Error: ${err.message}. Adding idea locally only.`);
+      }
+      
+      // Only add idea locally if API fails
+      const id = Math.random().toString(36).substring(2, 9);
+      setData(prevData => [...prevData, { ...newIdea, id }]);
+      setIsAddIdeaOpen(false);
+    }
+  };
+
+  // Handle updating an idea
+  const handleUpdateIdea = async (updatedIdea) => {
+    try {
+      const ideaId = updatedIdea._id || updatedIdea.id;
+      console.log(`Updating idea with ID: ${ideaId}`, updatedIdea);
+      
+      const response = await fetch(`http://localhost:3003/api/ideas/${ideaId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedIdea),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to update idea: ${errorData.error || response.status}`);
+      }
+      
+      const savedIdea = await response.json();
+      console.log('Idea updated in database:', savedIdea);
+      
+      // Update state with the updated idea from MongoDB
+      setData(prevData => prevData.map(item => 
+        (item._id === ideaId || item.id === ideaId) ? savedIdea : item
+      ));
+      setSelectedIdea(null);
+    } catch (err) {
+      console.error('Error updating idea:', err);
+      alert(`Failed to update idea in database: ${err.message}`);
+      // Update idea locally if API fails
+      setData(prevData => prevData.map(item => 
+        (item._id === updatedIdea._id || item.id === updatedIdea.id) ? updatedIdea : item
+      ));
+      setSelectedIdea(null);
+    }
+  };
+
+  // Handle deleting an idea
+  const handleDeleteIdea = async (ideaId) => {
+    try {
+      console.log(`Deleting idea with ID: ${ideaId}`);
+      const response = await fetch(`http://localhost:3003/api/ideas/${ideaId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Failed to delete idea: ${errorData.error || response.status}`);
+      }
+      
+      console.log('Idea deleted from database');
+      setData(prevData => prevData.filter(item => item._id !== ideaId && item.id !== ideaId));
+      setSelectedIdea(null);
+    } catch (err) {
+      console.error('Error deleting idea:', err);
+      alert(`Failed to delete idea from database: ${err.message}`);
+      // Delete idea locally if API fails
+      setData(prevData => prevData.filter(item => item._id !== ideaId && item.id !== ideaId));
+      setSelectedIdea(null);
+    }
+  };
 
   const columnHelper = createColumnHelper();
 
@@ -540,21 +725,6 @@ function App() {
     ));
   };
 
-  const handleAddIdea = (newIdea) => {
-    const idea = {
-      ...newIdea,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    setData(prev => [...prev, idea]);
-    setIsAddIdeaOpen(false);
-    
-    setShowConfetti(true);
-    setTimeout(() => setShowConfetti(false), 3000);
-  };
-
   const table = useReactTable({
     data,
     columns,
@@ -725,11 +895,14 @@ function App() {
         />
         
         {selectedIdea && (
-          <IdeaDetail
-            idea={selectedIdea}
-            onClose={() => setSelectedIdea(null)}
-            onSave={handleSaveIdea}
-          />
+          <ThemeProvider theme={currentTheme}>
+            <IdeaDetail
+              idea={selectedIdea}
+              onClose={() => setSelectedIdea(null)}
+              onSave={handleUpdateIdea}
+              onDelete={handleDeleteIdea}
+            />
+          </ThemeProvider>
         )}
       </EnterpriseLayout>
     </ThemeProvider>
