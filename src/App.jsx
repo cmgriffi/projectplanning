@@ -16,6 +16,7 @@ import styled, { ThemeProvider, createGlobalStyle } from 'styled-components';
 import EnterpriseLayout from './components/EnterpriseLayout';
 import DataTable from './components/DataTable';
 import ChatModal from './components/ChatModal';
+import TableFilters from './components/TableFilters';
 
 const lightTheme = {
   background: '#f7fafc',
@@ -335,6 +336,9 @@ function App() {
   const [draggedRowId, setDraggedRowId] = useState(null);
   const [draggedColumnId, setDraggedColumnId] = useState(null);
 
+  // Initialize column filters state
+  const [columnFilters, setColumnFilters] = useState([]);
+
   // Fetch ideas from the database
   useEffect(() => {
     const fetchIdeas = async () => {
@@ -652,56 +656,38 @@ function App() {
         minSize: 100,
         enableHiding: false,
         enableSorting: true,
+        enableColumnFilter: true,
+        filterFn: 'equals',
       }),
       columnHelper.accessor('title', {
         header: 'Title',
-        cell: info => {
-          const value = info.getValue() || 'Untitled';
-          return (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: `hsl(${Math.abs(value.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 360}, 70%, 80%)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#1a202c',
-                fontWeight: '500',
-                fontSize: '0.875rem',
-              }}>
-                {value.split(' ').map(word => word[0]).join('')}
-              </div>
-              {value}
-            </div>
-          );
-        },
-        size: 200,
-        minSize: 150,
+        cell: info => (
+          <div style={{ fontWeight: '500' }}>
+            {info.getValue()}
+          </div>
+        ),
+        size: 350,
+        minSize: 250,
         enableHiding: false,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
       }),
       columnHelper.accessor('description', {
         header: 'Description',
         cell: info => (
           <div style={{ 
+            maxWidth: '500px',
+            whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            lineHeight: '1.4',
-            opacity: 0.9,
           }}>
-            {info.getValue() || 'No description'}
+            {info.getValue()}
           </div>
         ),
         size: 350,
         minSize: 250,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
       }),
       columnHelper.accessor('status', {
         header: 'Status',
@@ -716,6 +702,8 @@ function App() {
         size: 140,
         minSize: 120,
         enableHiding: false,
+        enableColumnFilter: true,
+        filterFn: 'equals',
       }),
       columnHelper.accessor('priority', {
         header: 'Priority',
@@ -730,6 +718,8 @@ function App() {
         size: 120,
         minSize: 100,
         enableHiding: false,
+        enableColumnFilter: true,
+        filterFn: 'equals',
       }),
       columnHelper.accessor('owner', {
         header: 'Owner',
@@ -761,6 +751,8 @@ function App() {
         },
         size: 180,
         minSize: 150,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
       }),
       columnHelper.accessor('eta', {
         header: 'ETA',
@@ -778,6 +770,8 @@ function App() {
         },
         size: 120,
         minSize: 100,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
       }),
       columnHelper.accessor('region', {
         header: 'Region',
@@ -794,18 +788,24 @@ function App() {
         ),
         size: 120,
         minSize: 100,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
       }),
       columnHelper.accessor('businessFunction', {
         header: 'Business Function',
         cell: info => info.getValue(),
         size: 180,
         minSize: 150,
+        enableColumnFilter: true,
+        filterFn: 'equals',
       }),
       columnHelper.accessor('application', {
         header: 'Application',
         cell: info => info.getValue(),
         size: 150,
         minSize: 120,
+        enableColumnFilter: true,
+        filterFn: 'includesString',
       }),
     ],
     [currentTheme]
@@ -861,11 +861,13 @@ function App() {
       columnVisibility,
       columnOrder,
       globalFilter,
+      columnFilters,
     },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnOrderChange: setColumnOrder,
     onGlobalFilterChange: setGlobalFilter,
+    onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -876,7 +878,26 @@ function App() {
     enableColumnVisibility: true,
     enableColumnOrdering: true,
     enableGlobalFilter: true,
+    enableColumnFilters: true,
+    filterFns: {
+      includesString: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId);
+        return value?.toString().toLowerCase().includes(filterValue.toLowerCase());
+      },
+      equals: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId);
+        
+        // Handle multi-value filtering (array of selected values)
+        if (Array.isArray(filterValue)) {
+          return filterValue.includes(value);
+        }
+        
+        return value === filterValue;
+      },
+    },
   });
+
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   return (
     <ThemeProvider theme={currentTheme}>
@@ -911,7 +932,7 @@ function App() {
                 placeholder="Search ideas..."
               />
             </SearchInputWrapper>
-            <ActionButton>
+            <ActionButton onClick={() => setIsFilterOpen(!isFilterOpen)}>
               <FiFilter />
               Filter
             </ActionButton>
@@ -932,6 +953,10 @@ function App() {
             </ActionButton>
           </ToolbarGroup>
         </Controls>
+        
+        {isFilterOpen && (
+          <TableFilters table={table} />
+        )}
         
         {showColumnControls && (
           <div style={{ 

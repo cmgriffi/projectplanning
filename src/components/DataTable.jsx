@@ -2,6 +2,7 @@ import React from 'react';
 import styled from 'styled-components';
 import { flexRender } from '@tanstack/react-table';
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { ColumnFilter } from './ColumnFilter';
 
 const TableContainer = styled.div`
   width: 100%;
@@ -249,6 +250,9 @@ function DataTable({
                         desc: <FiChevronDown size={14} />
                       }[header.column.getIsSorted()] ?? null}
                     </SortIndicator>
+                    {header.column.getCanFilter() && header.column.id !== 'drag' && (
+                      <ColumnFilter column={header.column} table={table} />
+                    )}
                   </div>
                   <div
                     onMouseDown={header.getResizeHandler()}
