@@ -140,10 +140,12 @@ const SearchInput = styled.input`
 `;
 
 const StatusBadge = styled.span`
+  display: inline-block;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;
+  white-space: nowrap;
   background: ${props => {
     switch (props.status) {
       case 'In Progress':
@@ -152,6 +154,12 @@ const StatusBadge = styled.span`
         return '#F59E0B';
       case 'New':
         return '#3B82F6';
+      case 'Completed':
+        return '#8B5CF6';
+      case 'On Hold':
+        return '#F59E0B';
+      case 'Cancelled':
+        return '#6B7280';
       default:
         return '#6B7280';
     }
