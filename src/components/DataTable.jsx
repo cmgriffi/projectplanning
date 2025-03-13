@@ -2,7 +2,6 @@ import React from 'react';
 import styled from 'styled-components';
 import { flexRender } from '@tanstack/react-table';
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi';
-import { ColumnFilter } from './ColumnFilter';
 
 const TableContainer = styled.div`
   width: 100%;
@@ -18,6 +17,7 @@ const StyledTable = styled.table`
   border-spacing: 0;
   width: 100%;
   min-width: 800px;
+  table-layout: fixed;
   
   th {
     position: relative;
@@ -50,65 +50,86 @@ const StyledTable = styled.table`
       }
       
       &::before {
-        content: "⋮⋮";
-        display: inline-block;
-        margin-right: 5px;
-        font-size: 14px;
-        opacity: 0.5;
-        transform: rotate(90deg);
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 20px;
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
       }
     }
   }
   
   td {
     padding: 0.75rem 1rem;
-    border-top: 1px solid ${props => props.theme.borderColor};
+    border-bottom: 1px solid ${props => props.theme.borderColor};
     color: ${props => props.theme.text};
-    font-size: 0.875rem;
-    vertical-align: middle;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   
-  tbody tr {
-    cursor: pointer;
-    transition: background 0.2s;
-    
-    &:hover td {
-      background: ${props => props.theme.rowHover};
-    }
-    
-    &:nth-child(even) {
-      background: ${props => props.theme.isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)'};
-    }
-    
-    &.dragging td {
-      background: ${props => props.theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'};
-      opacity: 0.8;
-    }
-  }
-  
-  .resizer {
-    position: absolute;
-    right: 0;
-    top: 0;
-    height: 100%;
-    width: 4px;
-    background: transparent;
-    cursor: col-resize;
-    user-select: none;
-    touch-action: none;
-    opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 1;
-    
-    &.isResizing {
-      background: ${props => props.theme.buttonHover};
-      opacity: 1;
-    }
+  tr {
+    transition: background-color 0.2s;
     
     &:hover {
-      background: ${props => props.theme.buttonHover};
-      opacity: 1;
+      background-color: ${props => props.theme.rowHover};
     }
+    
+    &.dragging {
+      opacity: 0.5;
+      background-color: ${props => props.theme.rowHover};
+    }
+  }
+`;
+
+const SortIcon = styled.span`
+  display: inline-flex;
+  margin-left: 4px;
+`;
+
+const Resizer = styled.div`
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+  z-index: 10;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.5);
+  }
+  
+  &.isResizing {
+    background: rgba(255, 255, 255, 0.8);
+  }
+  
+  /* Show the resizer when hovering over the column header */
+  th:hover & {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  
+  /* Tooltip */
+  &:hover::after {
+    content: "Drag to resize";
+    position: absolute;
+    top: -25px;
+    right: 0;
+    background: #2d3748;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   }
 `;
 
@@ -177,11 +198,6 @@ const PaginationButton = styled.button`
   }
 `;
 
-const SortIndicator = styled.span`
-  display: inline-flex;
-  margin-left: 0.25rem;
-`;
-
 const DragHandle = styled.div`
   cursor: grab;
   padding: 0.5rem;
@@ -191,7 +207,7 @@ const DragHandle = styled.div`
   }
 `;
 
-function DataTable({ 
+const DataTable = ({ 
   table, 
   title, 
   onRowClick, 
@@ -205,7 +221,7 @@ function DataTable({
   onColumnDragEnd,
   onColumnDragOver,
   draggedColumnId
-}) {
+}) => {
   return (
     <TableContainer>
       {title && (
@@ -222,43 +238,57 @@ function DataTable({
               {headerGroup.headers.map(header => (
                 <th 
                   key={header.id}
-                  onClick={header.column.getToggleSortingHandler()}
                   style={{
                     width: header.getSize(),
+                    position: 'relative',
                   }}
-                  draggable={header.column.id !== 'drag'}
-                  onDragStart={(e) => {
-                    e.dataTransfer.effectAllowed = 'move';
-                    onColumnDragStart && onColumnDragStart(header.column.id);
-                  }}
-                  onDragEnd={() => onColumnDragEnd && onColumnDragEnd()}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    onColumnDragOver && onColumnDragOver(e, header.column.id);
-                  }}
-                  onDragEnter={(e) => e.preventDefault()}
                   className={draggedColumnId === header.column.id ? 'dragging' : ''}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div 
+                    style={{ display: 'flex', alignItems: 'center' }}
+                    onClick={header.column.getToggleSortingHandler()}
+                    draggable={header.column.id !== 'drag'}
+                    onDragStart={(e) => {
+                      // Only allow drag if we're not resizing
+                      if (table.getState().columnSizingInfo.isResizingColumn) {
+                        e.preventDefault();
+                        return;
+                      }
+                      e.dataTransfer.effectAllowed = 'move';
+                      onColumnDragStart && onColumnDragStart(header.column.id);
+                    }}
+                    onDragEnd={() => onColumnDragEnd && onColumnDragEnd()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      onColumnDragOver && onColumnDragOver(e, header.column.id);
+                    }}
+                    onDragEnter={(e) => e.preventDefault()}
+                  >
                     {flexRender(
                       header.column.columnDef.header,
                       header.getContext()
                     )}
-                    <SortIndicator>
+                    <SortIcon>
                       {{
                         asc: <FiChevronUp size={14} />,
                         desc: <FiChevronDown size={14} />
                       }[header.column.getIsSorted()] ?? null}
-                    </SortIndicator>
-                    {header.column.getCanFilter() && header.column.id !== 'drag' && (
-                      <ColumnFilter column={header.column} table={table} />
-                    )}
+                    </SortIcon>
                   </div>
-                  <div
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
-                    className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
-                  />
+                  {header.column.getCanResize() && (
+                    <Resizer 
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        header.getResizeHandler()(e);
+                      }}
+                      onTouchStart={(e) => {
+                        e.stopPropagation();
+                        header.getResizeHandler()(e);
+                      }}
+                      className={`resizer ${header.column.getIsResizing() ? 'isResizing' : ''}`}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
                 </th>
               ))}
             </tr>

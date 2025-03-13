@@ -347,6 +347,17 @@ function App() {
   // Initialize column filters state
   const [columnFilters, setColumnFilters] = useState([]);
 
+  // Initialize column sizing state
+  const [columnSizing, setColumnSizing] = useState({});
+  const [columnSizingInfo, setColumnSizingInfo] = useState({
+    startOffset: null,
+    startSize: null,
+    deltaOffset: null,
+    deltaPercentage: null,
+    isResizingColumn: false,
+    columnSizingStart: {}
+  });
+
   // Fetch ideas from the database
   useEffect(() => {
     const fetchIdeas = async () => {
@@ -684,7 +695,7 @@ function App() {
         header: 'Description',
         cell: info => (
           <div style={{ 
-            maxWidth: '500px',
+            maxWidth: '300px',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -692,8 +703,8 @@ function App() {
             {info.getValue()}
           </div>
         ),
-        size: 350,
-        minSize: 250,
+        size: 250,
+        minSize: 150,
         enableColumnFilter: true,
         filterFn: 'includesString',
       }),
@@ -884,12 +895,16 @@ function App() {
       columnOrder,
       globalFilter,
       columnFilters,
+      columnSizing,
+      columnSizingInfo,
     },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnOrderChange: setColumnOrder,
     onGlobalFilterChange: setGlobalFilter,
     onColumnFiltersChange: setColumnFilters,
+    onColumnSizingChange: setColumnSizing,
+    onColumnSizingInfoChange: setColumnSizingInfo,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
