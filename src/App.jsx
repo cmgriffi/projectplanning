@@ -812,7 +812,14 @@ function App() {
         size: 150,
         minSize: 120,
         enableColumnFilter: true,
-        filterFn: 'includesString',
+        filterFn: (row, columnId, filterValue) => {
+          // Handle multi-value filtering for application
+          if (Array.isArray(filterValue)) {
+            return filterValue.includes(row.getValue(columnId));
+          }
+          // Handle single value filtering
+          return row.getValue(columnId) === filterValue;
+        },
       }),
     ],
     [currentTheme]

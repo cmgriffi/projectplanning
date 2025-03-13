@@ -309,6 +309,22 @@ const TableFilters = ({ table }) => {
                 );
               }
               
+              // Special handling for application - use MultiSelectDropdown
+              if (columnId === 'application') {
+                return (
+                  <FilterGroup key={columnId}>
+                    <FilterLabel>{columnHeader}</FilterLabel>
+                    <MultiSelectDropdown
+                      options={uniqueValues}
+                      value={Array.isArray(localFilters[columnId]) ? localFilters[columnId] : 
+                             localFilters[columnId] ? [localFilters[columnId]] : []}
+                      onChange={(selected) => handleFilterChange(columnId, selected.length > 0 ? selected : undefined)}
+                      placeholder="Select applications"
+                    />
+                  </FilterGroup>
+                );
+              }
+              
               // Determine if we should use a select dropdown or text input
               const useSelectInput = 
                 (filterFn === 'equals' || 
