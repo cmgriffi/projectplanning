@@ -224,6 +224,11 @@ const DataTable = ({
   onColumnDragOver,
   draggedColumnId
 }) => {
+  console.log('DataTable props:', { 
+    draggedColumnId, 
+    columnHeaders: table.getAllColumns().map(col => ({ id: col.id, header: col.columnDef.header }))
+  });
+
   return (
     <TableContainer>
       {title && (
@@ -245,6 +250,7 @@ const DataTable = ({
                     position: 'relative',
                   }}
                   className={draggedColumnId === header.column.id ? 'dragging' : ''}
+                  data-column-id={header.column.id}
                 >
                   <div 
                     style={{ display: 'flex', alignItems: 'center' }}
@@ -257,11 +263,20 @@ const DataTable = ({
                         return;
                       }
                       e.dataTransfer.effectAllowed = 'move';
+                      // Store the column ID in dataTransfer to ensure it's available during drag operations
+                      e.dataTransfer.setData('text/plain', header.column.id);
+                      console.log(`Starting drag for column: ${header.column.id}`);
+                      console.log(`Column definition:`, header.column.columnDef);
+                      console.log(`Is column draggable: ${header.column.id !== 'drag'}`);
                       onColumnDragStart && onColumnDragStart(header.column.id);
                     }}
-                    onDragEnd={() => onColumnDragEnd && onColumnDragEnd()}
+                    onDragEnd={() => {
+                      console.log(`Drag ended for column: ${header.column.id}`);
+                      onColumnDragEnd && onColumnDragEnd();
+                    }}
                     onDragOver={(e) => {
                       e.preventDefault();
+                      console.log(`Dragging over column: ${header.column.id}`);
                       onColumnDragOver && onColumnDragOver(e, header.column.id);
                     }}
                     onDragEnter={(e) => e.preventDefault()}
@@ -313,7 +328,25 @@ const DataTable = ({
                     onDragStart && onDragStart(rowId);
                   }, 0);
                 }}
-                onDragEnd={() => onDragEnd && onDragEnd()}
+                onDragEnd={(e) => {
+                  // Find the element under the cursor
+                  const elementUnderCursor = document.elementFromPoint(e.clientX, e.clientY);
+                  // Find the closest row
+                  const targetRow = elementUnderCursor?.closest('tr');
+                  // Get the row ID
+                  const targetRowId = targetRow?.getAttribute('data-row-id');
+                  
+                  if (targetRowId && targetRowId !== rowId) {
+                    // Call the parent's onDragEnd with the target row ID
+                    onDragEnd && onDragEnd({
+                      active: { id: rowId },
+                      over: { id: targetRowId }
+                    });
+                  } else {
+                    // Just call onDragEnd with no target
+                    onDragEnd && onDragEnd();
+                  }
+                }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   onDragOver && onDragOver(e, rowId);
@@ -324,6 +357,7 @@ const DataTable = ({
                   if (e.target.closest('.drag-handle')) return;
                   onRowClick && onRowClick(row.original);
                 }}
+                data-row-id={rowId}
               >
                 {row.getVisibleCells().map(cell => {
                   // Special handling for the drag column

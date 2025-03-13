@@ -37,6 +37,20 @@ const IdeaSchema = new mongoose.Schema({
     trim: true,
     default: 'Global'
   },
+  businessFunction: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  application: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  stackRank: {
+    type: Number,
+    default: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now

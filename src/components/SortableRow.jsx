@@ -12,8 +12,8 @@ const StatusBadge = styled.span`
   font-size: 0.875rem;
   font-weight: 500;
   white-space: nowrap;
-  background: ${({ status, theme }) => {
-    switch (status) {
+  background: ${({ $status, theme }) => {
+    switch ($status) {
       case 'New':
         return theme.isDark ? '#2d3748' : '#e2e8f0';
       case 'In Progress':
@@ -24,8 +24,8 @@ const StatusBadge = styled.span`
         return theme.isDark ? '#2d3748' : '#e2e8f0';
     }
   }};
-  color: ${({ status, theme }) => {
-    switch (status) {
+  color: ${({ $status, theme }) => {
+    switch ($status) {
       case 'New':
         return theme.isDark ? '#a0aec0' : '#4a5568';
       case 'In Progress':
@@ -44,8 +44,8 @@ const PriorityBadge = styled.span`
   border-radius: 9999px;
   font-size: 0.875rem;
   font-weight: 500;
-  background: ${({ priority, theme }) => {
-    switch (priority) {
+  background: ${({ $priority, theme }) => {
+    switch ($priority) {
       case 'High':
         return theme.isDark ? '#742a2a' : '#fff5f5';
       case 'Medium':
@@ -56,8 +56,8 @@ const PriorityBadge = styled.span`
         return theme.isDark ? '#2d3748' : '#e2e8f0';
     }
   }};
-  color: ${({ priority, theme }) => {
-    switch (priority) {
+  color: ${({ $priority, theme }) => {
+    switch ($priority) {
       case 'High':
         return theme.isDark ? '#feb2b2' : '#c53030';
       case 'Medium':
@@ -229,14 +229,14 @@ export function SortableRow({ item, columns, onClick, ...props }) {
         if (column.id === 'status') {
           return (
             <td key={column.id}>
-              <StatusBadge status={value}>{value}</StatusBadge>
+              <StatusBadge $status={value}>{value}</StatusBadge>
             </td>
           );
         }
         if (column.id === 'priority') {
           return (
             <td key={column.id}>
-              <PriorityBadge priority={value}>{value}</PriorityBadge>
+              <PriorityBadge $priority={value}>{value}</PriorityBadge>
             </td>
           );
         }

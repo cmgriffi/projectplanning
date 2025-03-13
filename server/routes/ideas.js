@@ -17,6 +17,88 @@ router.get('/', async (req, res) => {
   }
 });
 
+// @route   PUT /api/ideas/reorder
+// @desc    Reorder ideas
+// @access  Public
+router.put('/reorder', async (req, res) => {
+  try {
+    console.log('Reordering ideas');
+    const { orderedIds, businessFunction } = req.body;
+    
+    if (!orderedIds || !Array.isArray(orderedIds)) {
+      console.log('Ordered IDs array is required but not provided or not an array');
+      return res.status(400).json({ error: 'Ordered IDs array is required' });
+    }
+    
+    if (!businessFunction) {
+      console.log('Business function is required but not provided');
+      return res.status(400).json({ error: 'Business function is required for reordering' });
+    }
+    
+    console.log(`Reordering ${orderedIds.length} ideas for business function: ${businessFunction}`);
+    
+    // Find all ideas for the specified business function
+    const businessFunctionIdeas = await Idea.find({ businessFunction });
+    console.log(`Found ${businessFunctionIdeas.length} ideas for business function: ${businessFunction}`);
+    
+    // Validate that all ideas exist before attempting to update
+    const existingIdeas = await Idea.find({ 
+      _id: { $in: orderedIds },
+      businessFunction
+    });
+    
+    const existingIdsSet = new Set(existingIdeas.map(idea => idea._id.toString()));
+    
+    const missingIds = orderedIds.filter(id => !existingIdsSet.has(id));
+    if (missingIds.length > 0) {
+      console.log(`Some ideas not found or not in business function ${businessFunction}: ${missingIds.join(', ')}`);
+      
+      // Filter out missing IDs and proceed with existing ones
+      const validIds = orderedIds.filter(id => existingIdsSet.has(id));
+      console.log(`Proceeding with ${validIds.length} valid ideas`);
+      
+      // Update order and stackRank for each valid idea
+      const updatePromises = validIds.map((id, index) => {
+        console.log(`Setting order ${index} and stackRank ${index + 1} for idea with ID: ${id}`);
+        return Idea.findByIdAndUpdate(id, { 
+          order: index,
+          stackRank: index + 1 // Stack rank starts at 1
+        }, { new: true });
+      });
+      
+      await Promise.all(updatePromises);
+      console.log('Valid ideas reordered successfully');
+      
+      // Get updated ideas for the business function
+      const ideas = await Idea.find({ businessFunction }).sort({ stackRank: 1 });
+      console.log(`Returning ${ideas.length} reordered ideas`);
+      
+      return res.json(ideas);
+    }
+    
+    // If all IDs are valid, proceed with normal update
+    const updatePromises = orderedIds.map((id, index) => {
+      console.log(`Setting order ${index} and stackRank ${index + 1} for idea with ID: ${id}`);
+      return Idea.findByIdAndUpdate(id, { 
+        order: index,
+        stackRank: index + 1 // Stack rank starts at 1
+      }, { new: true });
+    });
+    
+    await Promise.all(updatePromises);
+    console.log('All ideas reordered successfully');
+    
+    // Get updated ideas for the business function
+    const ideas = await Idea.find({ businessFunction }).sort({ stackRank: 1 });
+    console.log(`Returning ${ideas.length} reordered ideas`);
+    
+    res.json(ideas);
+  } catch (error) {
+    console.error('Error reordering ideas:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // @route   GET /api/ideas/:id
 // @desc    Get single idea
 // @access  Public
@@ -174,40 +256,6 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Idea not found' });
     }
     
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// @route   PUT /api/ideas/reorder
-// @desc    Reorder ideas
-// @access  Public
-router.put('/reorder', async (req, res) => {
-  try {
-    console.log('Reordering ideas');
-    const { orderedIds } = req.body;
-    
-    if (!orderedIds || !Array.isArray(orderedIds)) {
-      console.log('Ordered IDs array is required but not provided or not an array');
-      return res.status(400).json({ error: 'Ordered IDs array is required' });
-    }
-    
-    console.log(`Reordering ${orderedIds.length} ideas`);
-    // Update order for each idea
-    const updatePromises = orderedIds.map((id, index) => {
-      console.log(`Setting order ${index} for idea with ID: ${id}`);
-      return Idea.findByIdAndUpdate(id, { order: index }, { new: true });
-    });
-    
-    await Promise.all(updatePromises);
-    console.log('All ideas reordered successfully');
-    
-    // Get updated ideas
-    const ideas = await Idea.find().sort({ order: 1 });
-    console.log(`Returning ${ideas.length} reordered ideas`);
-    
-    res.json(ideas);
-  } catch (error) {
-    console.error('Error reordering ideas:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });

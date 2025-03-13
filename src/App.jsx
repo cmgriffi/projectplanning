@@ -17,6 +17,7 @@ import EnterpriseLayout from './components/EnterpriseLayout';
 import DataTable from './components/DataTable';
 import ChatModal from './components/ChatModal';
 import TableFilters from './components/TableFilters';
+import Avatar from 'react-avatar';
 
 const lightTheme = {
   background: '#f7fafc',
@@ -146,24 +147,7 @@ const StatusBadge = styled.span`
   font-size: 0.875rem;
   font-weight: 500;
   white-space: nowrap;
-  background: ${props => {
-    switch (props.status) {
-      case 'In Progress':
-        return '#10B981';
-      case 'Under Review':
-        return '#F59E0B';
-      case 'New':
-        return '#3B82F6';
-      case 'Completed':
-        return '#8B5CF6';
-      case 'On Hold':
-        return '#F59E0B';
-      case 'Cancelled':
-        return '#6B7280';
-      default:
-        return '#6B7280';
-    }
-  }};
+  background: ${props => props.$color || '#6B7280'};
   color: white;
 `;
 
@@ -172,18 +156,7 @@ const PriorityBadge = styled.span`
   border-radius: 4px;
   font-size: 0.875rem;
   font-weight: 500;
-  background: ${props => {
-    switch (props.priority) {
-      case 'High':
-        return '#EF4444';
-      case 'Medium':
-        return '#F59E0B';
-      case 'Low':
-        return '#10B981';
-      default:
-        return '#6B7280';
-    }
-  }};
+  background: ${props => props.$color || '#6B7280'};
   color: white;
 `;
 
@@ -306,7 +279,7 @@ function App() {
   const [sorting, setSorting] = useState([]);
   const [columnVisibility, setColumnVisibility] = useState({
     drag: true,
-    stack_rank: true,
+    stackRank: true,
     title: true,
     description: true,
     status: true,
@@ -318,17 +291,13 @@ function App() {
     application: true,
   });
   const [columnOrder, setColumnOrder] = useState(() => {
-    const savedColumnOrder = localStorage.getItem('columnOrder');
-    if (savedColumnOrder) {
-      try {
-        return JSON.parse(savedColumnOrder);
-      } catch (e) {
-        console.error('Error parsing saved column order:', e);
-      }
-    }
-    return [
+    // Clear any existing column order from localStorage to start fresh
+    localStorage.removeItem('columnOrder');
+    
+    // Default column order - these must match the accessor IDs exactly
+    const defaultOrder = [
       'drag',
-      'stack_rank',
+      'stackRank',
       'title',
       'description',
       'status',
@@ -339,6 +308,8 @@ function App() {
       'businessFunction',
       'application',
     ];
+    console.log('Using default column order:', defaultOrder);
+    return defaultOrder;
   });
   const [globalFilter, setGlobalFilter] = useState('');
   const [draggedRowId, setDraggedRowId] = useState(null);
@@ -358,86 +329,213 @@ function App() {
     columnSizingStart: {}
   });
 
-  // Fetch ideas from the database
-  useEffect(() => {
-    const fetchIdeas = async () => {
-      try {
-        setIsLoading(true);
-        console.log('Fetching ideas from server...');
-        const response = await fetch('http://localhost:3007/api/ideas');
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ideas: ${response.status}`);
-        }
-        
-        const ideas = await response.json();
-        console.log('Ideas fetched from server:', ideas);
-        
-        // Ensure we use the MongoDB data if available
-        if (ideas && ideas.length > 0) {
-          setData(ideas);
-        } else {
-          console.log('No ideas found in database, using initial data');
-          setData(initialItems);
-        }
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching ideas:', err);
-        setError('Failed to load ideas. Using sample data instead.');
-        setData(initialItems);
-      } finally {
-        setIsLoading(false);
+  // Fetch ideas from the server
+  const fetchIdeas = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      console.log('Fetching ideas from server...');
+      
+      const response = await fetch('http://localhost:3001/api/ideas');
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
-    };
-    
+      
+      const ideas = await response.json();
+      console.log(`Fetched ${ideas.length} ideas from server`);
+      
+      // Group ideas by business function and sort by order within each group
+      const businessFunctionGroups = {};
+      ideas.forEach(idea => {
+        const businessFunction = idea.businessFunction || 'Unassigned';
+        if (!businessFunctionGroups[businessFunction]) {
+          businessFunctionGroups[businessFunction] = [];
+        }
+        businessFunctionGroups[businessFunction].push(idea);
+      });
+      
+      // Sort ideas within each business function group by order
+      Object.values(businessFunctionGroups).forEach(group => {
+        group.sort((a, b) => a.order - b.order);
+      });
+      
+      // Flatten the sorted groups back into a single array
+      // First sort by business function, then by order within each function
+      const sortedIdeas = ideas.sort((a, b) => {
+        const funcA = a.businessFunction || 'Unassigned';
+        const funcB = b.businessFunction || 'Unassigned';
+        
+        if (funcA !== funcB) {
+          return funcA.localeCompare(funcB);
+        }
+        
+        return a.order - b.order;
+      });
+      
+      console.log('Ideas sorted by business function and order');
+      setData(sortedIdeas);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error fetching ideas:', error);
+      setIsLoading(false);
+      alert(`Failed to fetch ideas: ${error.message}`);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchIdeas();
+  }, [fetchIdeas]);
+
+  const handleDragStart = useCallback((event) => {
+    // If we receive an event object from DataTable
+    if (event && event.active && event.active.id) {
+      setDraggedRowId(String(event.active.id));
+    } 
+    // Fallback for direct ID
+    else if (typeof event === 'string') {
+      setDraggedRowId(event);
+    }
   }, []);
 
-  const handleDragStart = useCallback((rowId) => {
-    setDraggedRowId(rowId);
-  }, []);
+  const handleDragEnd = useCallback(async (event) => {
+    // If no drag is in progress, exit
+    if (!draggedRowId) {
+      return;
+    }
 
-  const handleDragEnd = useCallback(async () => {
-    if (!draggedRowId) return;
+    // Check if we have an event object from DataTable
+    let activeId = draggedRowId;
+    let overId = null;
+    
+    if (event && event.active && event.over) {
+      // Using the event object
+      activeId = String(event.active.id);
+      overId = event.over ? String(event.over.id) : null;
+    }
+    
+    // If we don't have a valid target, exit
+    if (!overId) {
+      setDraggedRowId(null);
+      return;
+    }
+    
+    console.log(`Dragging row with ID ${activeId} over row with ID ${overId}`);
+    
+    // Find the indices of the active and over rows
+    const activeIndex = data.findIndex(item => String(item._id || item.id) === activeId);
+    const overIndex = data.findIndex(item => String(item._id || item.id) === overId);
+    
+    if (activeIndex === -1 || overIndex === -1) {
+      console.error('Could not find row indices for drag operation');
+      setDraggedRowId(null);
+      return;
+    }
+    
+    // Get the business function of the active row
+    const activeBusinessFunction = data[activeIndex].businessFunction || 'Unassigned';
+    const overBusinessFunction = data[overIndex].businessFunction || 'Unassigned';
+    
+    // Only allow reordering within the same business function
+    if (activeBusinessFunction !== overBusinessFunction) {
+      console.log('Cannot reorder across different business functions');
+      setDraggedRowId(null);
+      return;
+    }
+    
+    // Filter rows by business function to only reorder within the same function
+    const businessFunctionRows = data.filter(item => 
+      (item.businessFunction || 'Unassigned') === activeBusinessFunction
+    );
+    
+    // Find the indices within the business function group
+    const activeFunctionIndex = businessFunctionRows.findIndex(item => 
+      String(item._id || item.id) === activeId
+    );
+    
+    // Find the target index within the business function group
+    const overFunctionIndex = businessFunctionRows.findIndex(item => 
+      String(item._id || item.id) === overId
+    );
+    
+    if (activeFunctionIndex === -1 || overFunctionIndex === -1) {
+      console.error('Could not find row indices within business function for drag operation');
+      setDraggedRowId(null);
+      return;
+    }
+    
+    // Create a new array with the reordered items
+    const newBusinessFunctionRows = [...businessFunctionRows];
+    const [removed] = newBusinessFunctionRows.splice(activeFunctionIndex, 1);
+    newBusinessFunctionRows.splice(overFunctionIndex, 0, removed);
+    
+    // Update the order property for all items in the business function
+    const updatedBusinessFunctionRows = newBusinessFunctionRows.map((item, index) => ({
+      ...item,
+      order: index,
+      stackRank: index + 1 // Update stackRank to be 1-based
+    }));
+    
+    // Create a new data array with the updated business function rows
+    const newData = [...data];
+    
+    // Replace the old business function rows with the updated ones
+    updatedBusinessFunctionRows.forEach(updatedItem => {
+      const index = newData.findIndex(item => 
+        String(item._id || item.id) === String(updatedItem._id || updatedItem.id)
+      );
+      if (index !== -1) {
+        newData[index] = updatedItem;
+      }
+    });
+    
+    // Update the state
+    setData(newData);
     setDraggedRowId(null);
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 3000);
     
     // Save the new order to the database
     try {
-      const orderedIds = data.map(item => item._id || item.id);
-      console.log('Saving new order to database:', orderedIds);
+      console.log('Saving new order to database...');
+      const orderedIds = updatedBusinessFunctionRows.map(item => item._id || item.id);
       
-      const response = await fetch('http://localhost:3007/api/ideas/reorder', {
+      const response = await fetch('http://localhost:3001/api/ideas/reorder', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ orderedIds }),
+        body: JSON.stringify({ 
+          orderedIds,
+          businessFunction: activeBusinessFunction
+        }),
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to reorder ideas: ${errorData.error || response.status}`);
+        throw new Error(`Failed to save order: ${response.status}`);
       }
       
-      // Get the updated ideas with new stack rankings from the server
-      const updatedIdeas = await response.json();
-      console.log('Ideas reordered successfully in database with updated stack rankings:', updatedIdeas);
+      console.log('Order saved successfully');
       
-      // Update the local state with the server response to ensure consistency
-      if (updatedIdeas && updatedIdeas.length > 0) {
-        setData(updatedIdeas);
-      }
-    } catch (err) {
-      console.error('Error saving idea order:', err);
-      alert(`Failed to save idea order to database: ${err.message}`);
+      // Refresh data from server to ensure we have the latest order
+      fetchIdeas();
+    } catch (error) {
+      console.error('Error saving order:', error);
+      alert(`Failed to save order: ${error.message}`);
     }
-  }, [draggedRowId, data]);
+  }, [data, draggedRowId, fetchIdeas]);
 
   const handleDragOver = useCallback((e, targetRowId) => {
     e.preventDefault();
     if (!draggedRowId || draggedRowId === targetRowId) return;
+    
+    // Find the dragged and target rows
+    const draggedRow = data.find(item => (item._id || item.id) === draggedRowId);
+    const targetRow = data.find(item => (item._id || item.id) === targetRowId);
+    
+    // Only allow reordering within the same business function
+    if (!draggedRow || !targetRow || draggedRow.businessFunction !== targetRow.businessFunction) {
+      return;
+    }
     
     // Find the indices of the dragged and target rows
     const draggedIndex = data.findIndex(item => (item._id || item.id) === draggedRowId);
@@ -450,11 +548,6 @@ function App() {
     const [draggedItem] = newData.splice(draggedIndex, 1);
     newData.splice(targetIndex, 0, draggedItem);
     
-    // Update the order property for each item based on its new position
-    newData.forEach((item, index) => {
-      item.order = index;
-    });
-    
     // Group items by business function
     const businessFunctionGroups = {};
     newData.forEach(item => {
@@ -465,10 +558,10 @@ function App() {
       businessFunctionGroups[businessFunction].push(item);
     });
     
-    // Update stack_rank within each business function group
+    // Update order within each business function group
     Object.values(businessFunctionGroups).forEach(group => {
       group.forEach((item, index) => {
-        item.stack_rank = index + 1;
+        item.order = index;
       });
     });
     
@@ -478,20 +571,56 @@ function App() {
 
   // Column drag-and-drop handlers
   const handleColumnDragStart = useCallback((columnId) => {
-    setDraggedColumnId(columnId);
     console.log(`Started dragging column: ${columnId}`);
-  }, []);
+    console.log(`Current column order before drag:`, columnOrder);
+    
+    // Ensure the column order includes all columns
+    let updatedColumnOrder = [...columnOrder];
+    if (!updatedColumnOrder.includes(columnId)) {
+      console.log(`Adding missing column ${columnId} to the column order`);
+      // Add it after the drag column or at the beginning
+      const dragIndex = updatedColumnOrder.indexOf('drag');
+      if (dragIndex !== -1) {
+        updatedColumnOrder.splice(dragIndex + 1, 0, columnId);
+      } else {
+        updatedColumnOrder.unshift(columnId);
+      }
+      setColumnOrder(updatedColumnOrder);
+      console.log('Updated column order:', updatedColumnOrder);
+    }
+    
+    setDraggedColumnId(columnId);
+  }, [columnOrder]);
 
   const handleColumnDragOver = useCallback((e, targetColumnId) => {
     e.preventDefault();
     if (!draggedColumnId || draggedColumnId === targetColumnId) return;
+    
+    console.log(`Dragging column ${draggedColumnId} over column ${targetColumnId}`);
     
     // Find the indices of the dragged and target columns
     const currentColumnOrder = [...columnOrder];
     const draggedIndex = currentColumnOrder.indexOf(draggedColumnId);
     const targetIndex = currentColumnOrder.indexOf(targetColumnId);
     
-    if (draggedIndex === -1 || targetIndex === -1) return;
+    console.log(`Dragged column index: ${draggedIndex}, Target column index: ${targetIndex}`);
+    
+    if (draggedIndex === -1 || targetIndex === -1) {
+      console.error(`Column not found in order: ${draggedIndex === -1 ? draggedColumnId : targetColumnId}`);
+      
+      // Fix for stack rank column - add it to the order if missing
+      if (draggedColumnId === 'stackRank' && draggedIndex === -1) {
+        const newColumnOrder = [...currentColumnOrder];
+        // Add it after the drag column
+        const dragColIndex = newColumnOrder.indexOf('drag');
+        newColumnOrder.splice(dragColIndex + 1, 0, 'stackRank');
+        setColumnOrder(newColumnOrder);
+        console.log('Added stackRank to column order:', newColumnOrder);
+        return;
+      }
+      
+      return;
+    }
     
     // Create a new array with the reordered columns
     const newColumnOrder = [...currentColumnOrder];
@@ -504,24 +633,27 @@ function App() {
   }, [columnOrder, draggedColumnId]);
 
   const handleColumnDragEnd = useCallback(() => {
+    if (!draggedColumnId) return;
+    
+    console.log('Finished dragging column, final order:', columnOrder);
+    console.log(`Dragged column ID: ${draggedColumnId}`);
     setDraggedColumnId(null);
-    console.log('Finished dragging column, new order:', columnOrder);
     
     // Save column order to localStorage for persistence
     localStorage.setItem('columnOrder', JSON.stringify(columnOrder));
-  }, [columnOrder]);
+  }, [columnOrder, draggedColumnId]);
 
   // Handle adding a new idea
   const handleAddIdea = async (newIdea) => {
     try {
       console.log('Adding new idea:', newIdea);
-      console.log('Sending request to http://localhost:3007/api/ideas');
+      console.log('Sending request to http://localhost:3001/api/ideas');
       
       // Add a timestamp to help with debugging
       const requestStartTime = new Date().toISOString();
       console.log(`Request started at: ${requestStartTime}`);
       
-      const response = await fetch('http://localhost:3007/api/ideas', {
+      const response = await fetch('http://localhost:3001/api/ideas', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -560,18 +692,19 @@ function App() {
       
       // Only add idea locally if API fails
       const id = Math.random().toString(36).substring(2, 9);
-      setData(prevData => [...prevData, { ...newIdea, id }]);
+      setData(prev => [...prev, { ...newIdea, id }]);
       setIsAddIdeaOpen(false);
     }
   };
 
   // Handle updating an idea
   const handleUpdateIdea = async (updatedIdea) => {
+    const ideaId = updatedIdea._id || updatedIdea.id;
+    
     try {
-      const ideaId = updatedIdea._id || updatedIdea.id;
-      console.log(`Updating idea with ID: ${ideaId}`, updatedIdea);
+      console.log('Updating idea:', updatedIdea);
       
-      const response = await fetch(`http://localhost:3007/api/ideas/${ideaId}`, {
+      const response = await fetch(`http://localhost:3001/api/ideas/${ideaId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -580,23 +713,22 @@ function App() {
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Failed to update idea: ${errorData.error || response.status}`);
+        throw new Error(`Error: ${response.status}`);
       }
       
       const savedIdea = await response.json();
-      console.log('Idea updated in database:', savedIdea);
+      console.log('Idea updated successfully:', savedIdea);
       
       // Update state with the updated idea from MongoDB
-      setData(prevData => prevData.map(item => 
-        (item._id === ideaId || item.id === ideaId) ? savedIdea : item
+      setData(prevData => prevData.map(item =>
+        (item._id === savedIdea._id || item.id === savedIdea.id) ? savedIdea : item
       ));
       setSelectedIdea(null);
     } catch (err) {
       console.error('Error updating idea:', err);
       alert(`Failed to update idea in database: ${err.message}`);
       // Update idea locally if API fails
-      setData(prevData => prevData.map(item => 
+      setData(prevData => prevData.map(item =>
         (item._id === updatedIdea._id || item.id === updatedIdea.id) ? updatedIdea : item
       ));
       setSelectedIdea(null);
@@ -607,7 +739,7 @@ function App() {
   const handleDeleteIdea = async (ideaId) => {
     try {
       console.log(`Deleting idea with ID: ${ideaId}`);
-      const response = await fetch(`http://localhost:3007/api/ideas/${ideaId}`, {
+      const response = await fetch(`http://localhost:3001/api/ideas/${ideaId}`, {
         method: 'DELETE',
       });
       
@@ -630,8 +762,15 @@ function App() {
 
   const columnHelper = createColumnHelper();
 
-  const columns = useMemo(
-    () => [
+  const columns = useMemo(() => {
+    // Log the current theme for debugging
+    console.log('Creating columns with theme:', currentTheme);
+    
+    // Log the column order for debugging
+    console.log('Current column order:', columnOrder);
+    
+    // Create an array to hold all column definitions
+    const columnDefinitions = [
       columnHelper.display({
         id: 'drag',
         header: '',
@@ -642,13 +781,14 @@ function App() {
         ),
         size: 48,
         enableHiding: false,
+        enableColumnOrdering: false,
       }),
-      columnHelper.accessor('stack_rank', {
-        header: 'Stack Ranking',
+      columnHelper.accessor((row) => row.stackRank, {
+        id: 'stackRank', // Explicitly set the ID to match the column order
+        header: 'Stack Rank',
         cell: info => {
-          const value = info.getValue() || info.row.index + 1;
-          const businessFunction = info.row.original.businessFunction || 'Unassigned';
-          
+          const value = info.getValue();
+          const businessFunction = info.row.original.businessFunction || 'Unknown';
           return (
             <div 
               style={{ 
@@ -667,7 +807,7 @@ function App() {
               }}
               title={`Rank #${value} in ${businessFunction}`}
             >
-              {value}
+              {value || '-'}
             </div>
           );
         },
@@ -677,6 +817,7 @@ function App() {
         enableSorting: true,
         enableColumnFilter: true,
         filterFn: 'equals',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('title', {
         header: 'Title',
@@ -690,6 +831,7 @@ function App() {
         enableHiding: false,
         enableColumnFilter: true,
         filterFn: 'includesString',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('description', {
         header: 'Description',
@@ -707,13 +849,21 @@ function App() {
         minSize: 150,
         enableColumnFilter: true,
         filterFn: 'includesString',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('status', {
         header: 'Status',
         cell: info => {
           const value = info.getValue() || 'New';
           return (
-            <StatusBadge status={value}>
+            <StatusBadge $color={{
+              'In Progress': '#10B981',
+              'Under Review': '#F59E0B',
+              'New': '#3B82F6',
+              'Completed': '#8B5CF6',
+              'On Hold': '#F59E0B',
+              'Cancelled': '#6B7280',
+            }[value]}>
               {value}
             </StatusBadge>
           );
@@ -723,13 +873,18 @@ function App() {
         enableHiding: false,
         enableColumnFilter: true,
         filterFn: 'equals',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('priority', {
         header: 'Priority',
         cell: info => {
           const value = info.getValue() || 'Medium';
           return (
-            <PriorityBadge priority={value}>
+            <PriorityBadge $color={{
+              'High': '#EF4444',
+              'Medium': '#F59E0B',
+              'Low': '#10B981',
+            }[value]}>
               {value}
             </PriorityBadge>
           );
@@ -739,32 +894,23 @@ function App() {
         enableHiding: false,
         enableColumnFilter: true,
         filterFn: 'equals',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('owner', {
         header: 'Owner',
         cell: info => {
-          const value = info.getValue() || 'Unassigned';
+          const owner = info.getValue();
+          if (!owner) return '-';
+          
           return (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                background: `hsl(${Math.abs(value.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 360}, 70%, 80%)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#1a202c',
-                fontWeight: '500',
-                fontSize: '0.875rem',
-              }}>
-                {value.split(' ').map(word => word[0]).join('')}
-              </div>
-              {value}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Avatar 
+                name={owner} 
+                size="32" 
+                round={true} 
+                textSizeRatio={2.5} 
+              />
+              {owner}
             </div>
           );
         },
@@ -772,6 +918,7 @@ function App() {
         minSize: 150,
         enableColumnFilter: true,
         filterFn: 'includesString',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('eta', {
         header: 'ETA',
@@ -791,6 +938,7 @@ function App() {
         minSize: 100,
         enableColumnFilter: true,
         filterFn: 'includesString',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('region', {
         header: 'Region',
@@ -809,10 +957,11 @@ function App() {
         minSize: 100,
         enableColumnFilter: true,
         filterFn: 'includesString',
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('businessFunction', {
         header: 'Business Function',
-        cell: info => info.getValue(),
+        cell: info => info.getValue() || '-',
         size: 180,
         minSize: 150,
         enableColumnFilter: true,
@@ -824,10 +973,11 @@ function App() {
           // Handle single value filtering
           return row.getValue(columnId) === filterValue;
         },
+        enableColumnOrdering: true,
       }),
       columnHelper.accessor('application', {
         header: 'Application',
-        cell: info => info.getValue(),
+        cell: info => info.getValue() || '-',
         size: 150,
         minSize: 120,
         enableColumnFilter: true,
@@ -839,10 +989,13 @@ function App() {
           // Handle single value filtering
           return row.getValue(columnId) === filterValue;
         },
+        enableColumnOrdering: true,
       }),
-    ],
-    [currentTheme]
-  );
+    ];
+    
+    // Return the column definitions
+    return columnDefinitions;
+  }, [currentTheme]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -916,6 +1069,7 @@ function App() {
     enableColumnOrdering: true,
     enableGlobalFilter: true,
     enableColumnFilters: true,
+    debugTable: true, // Enable table debugging
     filterFns: {
       includesString: (row, columnId, filterValue) => {
         const value = row.getValue(columnId);
@@ -1065,7 +1219,7 @@ function App() {
             <div style={{ width: '100%', maxWidth: '600px', margin: '2rem' }}>
               <CreateIdea
                 onSubmit={(newIdea) => {
-                  const id = String(data.length + 1);
+                  const id = Math.random().toString(36).substring(2, 9);
                   setData(prev => [...prev, { ...newIdea, id }]);
                   setShowCreateForm(false);
                   setShowConfetti(true);
