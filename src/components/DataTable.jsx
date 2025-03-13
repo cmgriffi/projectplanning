@@ -11,6 +11,8 @@ const TableContainer = styled.div`
   background: ${props => props.theme.tableBackground};
   transition: all 0.3s ease;
   border: 1px solid ${props => props.theme.borderColor};
+  position: relative;
+  z-index: 10;
 `;
 
 const StyledTable = styled.table`

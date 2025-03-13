@@ -10,6 +10,8 @@ const FiltersContainer = styled.div`
   border: 1px solid ${props => props.theme.borderColor};
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  position: relative;
+  z-index: 50;
 `;
 
 const FiltersHeader = styled.div`

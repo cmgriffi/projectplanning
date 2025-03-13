@@ -21,3 +21,18 @@ html, body {
   display: flex;
   flex-direction: column;
 }
+
+/* Global styles for dropdown menus to ensure they appear above all other elements */
+.dropdown-portal {
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+}
+
+.dropdown-portal > * {
+  pointer-events: auto;
+}

@@ -940,19 +940,8 @@ function App() {
     <ThemeProvider theme={currentTheme}>
       <GlobalStyle />
       
-      {showConfetti && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity: confettiOpacity, transition: 'opacity 0.05s linear', zIndex: 9999 }}>
-          <ReactConfetti
-            width={windowSize.width}
-            height={windowSize.height}
-            recycle={false}
-            numberOfPieces={200}
-            gravity={0.2}
-            initialVelocityY={20}
-            colors={['#10B981', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899']}
-          />
-        </div>
-      )}
+      {/* Portal container for dropdowns */}
+      <div id="dropdown-portal" className="dropdown-portal"></div>
       
       <EnterpriseLayout 
         title="Product Ideas Pipeline"
@@ -1106,6 +1095,20 @@ function App() {
           </ThemeProvider>
         )}
       </EnterpriseLayout>
+      
+      {showConfetti && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', opacity: confettiOpacity, transition: 'opacity 0.05s linear', zIndex: 9999 }}>
+          <ReactConfetti
+            width={windowSize.width}
+            height={windowSize.height}
+            recycle={false}
+            numberOfPieces={200}
+            gravity={0.2}
+            initialVelocityY={20}
+            colors={['#10B981', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899']}
+          />
+        </div>
+      )}
     </ThemeProvider>
   );
 }
